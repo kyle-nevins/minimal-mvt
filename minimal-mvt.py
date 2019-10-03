@@ -3,6 +3,7 @@ import socketserver
 import re
 import psycopg2
 import json
+import os
 
 db_user = os.getenv('PG_USER', None)
 db_password = os.getenv('PG_PASSWORD', None)
