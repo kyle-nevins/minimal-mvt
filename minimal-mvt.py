@@ -30,7 +30,7 @@ TABLE = {
     }
 
 # HTTP server information
-HOST = 'localhost'
+HOST = '0.0.0.0'
 PORT = 8080
 
 
