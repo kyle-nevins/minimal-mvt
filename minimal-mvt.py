@@ -4,23 +4,29 @@ import re
 import psycopg2
 import json
 
+db_user = os.getenv('PG_USER', None)
+db_password = os.getenv('PG_PASSWORD', None)
+db_name = os.getenv('PG_DATABASE', None)
+db_port = os.getenv('PG_PORT', None)
+db_host = os.getenv('PG_HOST', None)
+
 # Database to connect to
 DATABASE = {
-    'user':     'pramsey',
-    'password': 'password',
-    'host':     'localhost',
-    'port':     '5432',
-    'database': 'nyc'
+    'user':     db_user,
+    'password': db_password,
+    'host':     db_host,
+    'port':     db_port,
+    'database': db_name
     }
 
 # Table to query for MVT data, and columns to
 # include in the tiles.
 TABLE = {
-    'table':       'nyc_streets',
-    'srid':        '26918',
+    'table':       'assessor_parcels',
+    'srid':        '4326',
     'geomColumn':  'geom',
-    'attrColumns': 'gid, name, type'
-    }  
+    'attrColumns': 'gid, firehazard'
+    }
 
 # HTTP server information
 HOST = 'localhost'
@@ -37,15 +43,15 @@ class TileRequestHandler(http.server.BaseHTTPRequestHandler):
     def pathToTile(self, path):
         m = re.search(r'^\/(\d+)\/(\d+)\/(\d+)\.(\w+)', path)
         if (m):
-            return {'zoom':   int(m.group(1)), 
-                    'x':      int(m.group(2)), 
-                    'y':      int(m.group(3)), 
+            return {'zoom':   int(m.group(1)),
+                    'x':      int(m.group(2)),
+                    'y':      int(m.group(3)),
                     'format': m.group(4)}
         else:
             return None
 
 
-    # Do we have all keys we need? 
+    # Do we have all keys we need?
     # Do the tile x/y coordinates make sense at this zoom level?
     def tileIsValid(self, tile):
         if not ('x' in tile and 'y' in tile and 'zoom' in tile):
@@ -92,7 +98,7 @@ class TileRequestHandler(http.server.BaseHTTPRequestHandler):
 
 
     # Generate a SQL query to pull a tile worth of MVT data
-    # from the table of interest.        
+    # from the table of interest.
     def envelopeToSQL(self, env):
         tbl = TABLE.copy()
         tbl['env'] = self.envelopeToBoundsSQL(env)
@@ -100,17 +106,17 @@ class TileRequestHandler(http.server.BaseHTTPRequestHandler):
         # Select the relevant geometry and clip to MVT bounds
         # Convert to MVT format
         sql_tmpl = """
-            WITH 
+            WITH
             bounds AS (
-                SELECT {env} AS geom, 
+                SELECT {env} AS geom,
                        {env}::box2d AS b2d
             ),
             mvtgeom AS (
-                SELECT ST_AsMVTGeom(ST_Transform(t.{geomColumn}, 3857), bounds.b2d) AS geom, 
+                SELECT ST_AsMVTGeom(ST_Transform(t.{geomColumn}, 3857), bounds.b2d) AS geom,
                        {attrColumns}
                 FROM {table} t, bounds
                 WHERE ST_Intersects(t.{geomColumn}, ST_Transform(bounds.geom, {srid}))
-            ) 
+            )
             SELECT ST_AsMVT(mvtgeom.*) FROM mvtgeom
         """
         return sql_tmpl.format(**tbl)
@@ -133,7 +139,7 @@ class TileRequestHandler(http.server.BaseHTTPRequestHandler):
                 self.send_error(404, "sql query failed: %s" % (sql))
                 return None
             return cur.fetchone()[0]
-        
+
         return None
 
 
@@ -151,7 +157,7 @@ class TileRequestHandler(http.server.BaseHTTPRequestHandler):
 
         self.log_message("path: %s\ntile: %s\n env: %s" % (self.path, tile, env))
         self.log_message("sql: %s" % (sql))
-        
+
         self.send_response(200)
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Content-type", "application/vnd.mapbox-vector-tile")
